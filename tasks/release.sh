@@ -13,6 +13,7 @@
 # https://github.com/facebookincubator/create-react-app/blob/master/CONTRIBUTING.md#cutting-a-release
 # ******************************************************************************
 
+
 # Start in tasks/ even if run from root directory
 cd "$(dirname "$0")"
 
