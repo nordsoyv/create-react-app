@@ -67,6 +67,7 @@ npm install
 
 cd packages/react-scripts
 # Force dedupe
+npm install
 npm dedupe
 
 # Don't bundle fsevents because it is optional and OS X-only
