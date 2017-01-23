@@ -20,7 +20,7 @@
     "utils"
   ],
   "bin": {
-    "react-scripts": "./bin/confirmit-react-scripts.js"
+    "confirmit-react-scripts": "./bin/confirmit-react-scripts.js"
   },
   "dependencies": {
     "autoprefixer": "6.4.1",
