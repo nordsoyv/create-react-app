@@ -84,4 +84,5 @@ cd $clean_path
 
 # cleanup
 cd ..
-rm -rf $clean_path
+# dont clean up
+#rm -rf $clean_path
