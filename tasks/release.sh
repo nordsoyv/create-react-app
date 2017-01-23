@@ -80,7 +80,7 @@ node ./node_modules/.bin/bundle-deps
 cd $clean_path
 
 # Go!
-./node_modules/.bin/lerna publish --independent "$@"
+./node_modules/.bin/lerna publish --independent "$@" --skip-npm
 
 # cleanup
 cd ..
