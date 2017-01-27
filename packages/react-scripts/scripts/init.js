@@ -10,13 +10,13 @@
 var fs = require('fs-extra');
 var path = require('path');
 var spawn = require('cross-spawn');
-var pathExists = require('path-exists');
 var chalk = require('chalk');
 
-module.exports = function(appPath, appName, verbose, originalDirectory) {
+module.exports = function(appPath, appName, verbose, originalDirectory, template) {
   var ownPackageName = require(path.join(__dirname, '..', 'package.json')).name;
   var ownPath = path.join(appPath, 'node_modules', ownPackageName);
   var appPackage = require(path.join(appPath, 'package.json'));
+  var useYarn = fs.existsSync(path.join(appPath, 'yarn.lock'));
 
   // Copy over some of the devDependencies
   appPackage.dependencies = appPackage.dependencies || {};
@@ -24,10 +24,10 @@ module.exports = function(appPath, appName, verbose, originalDirectory) {
 
   // Setup the script rules
   appPackage.scripts = {
-    'start': ownPackageName + ' start',
-    'build': ownPackageName + ' build',
-    'test': ownPackageName + ' test --env=jsdom',
-    'eject': ownPackageName + ' eject'
+    'start': 'react-scripts start',
+    'build': 'react-scripts build',
+    'test': 'react-scripts test --env=jsdom',
+    'eject': 'react-scripts eject'
   };
 
   fs.writeFileSync(
@@ -35,13 +35,19 @@ module.exports = function(appPath, appName, verbose, originalDirectory) {
     JSON.stringify(appPackage, null, 2)
   );
 
-  var readmeExists = pathExists.sync(path.join(appPath, 'README.md'));
+  var readmeExists = fs.existsSync(path.join(appPath, 'README.md'));
   if (readmeExists) {
     fs.renameSync(path.join(appPath, 'README.md'), path.join(appPath, 'README.old.md'));
   }
 
   // Copy the files for the user
-  fs.copySync(path.join(ownPath, 'template'), appPath);
+  var templatePath = template ? path.resolve(originalDirectory, template) : path.join(ownPath, 'template');
+  if (fs.existsSync(templatePath)) {
+    fs.copySync(templatePath, appPath);
+  } else {
+    console.error('Could not locate supplied template: ' + chalk.green(templatePath));
+    return;
+  }
 
   // Rename gitignore after the fact to prevent npm from renaming it to .npmignore
   // See: https://github.com/npm/npm/issues/1862
@@ -58,21 +64,41 @@ module.exports = function(appPath, appName, verbose, originalDirectory) {
     }
   });
 
-  // Run another npm install for react and react-dom
-  console.log('Installing react and react-dom from npm...');
+  // Run yarn or npm for react and react-dom
+  // TODO: having to do two npm/yarn installs is bad, can we avoid it?
+  var command;
+  var args;
+
+  if (useYarn) {
+    command = 'yarnpkg';
+    args = ['add'];
+  } else {
+    command = 'npm';
+    args = [
+      'install',
+      '--save',
+      verbose && '--verbose'
+    ].filter(function(e) { return e; });
+  }
+  args.push('react', 'react-dom');
+
+  // Install additional template dependencies, if present
+  var templateDependenciesPath = path.join(appPath, '.template.dependencies.json');
+  if (fs.existsSync(templateDependenciesPath)) {
+    var templateDependencies = require(templateDependenciesPath).dependencies;
+    args = args.concat(Object.keys(templateDependencies).map(function (key) {
+      return key + '@' + templateDependencies[key];
+    }));
+    fs.unlinkSync(templateDependenciesPath);
+  }
+
+  console.log('Installing react and react-dom using ' + command + '...');
   console.log();
-  // TODO: having to do two npm installs is bad, can we avoid it?
-  var args = [
-    'install',
-    'react',
-    'react-dom',
-    '--save',
-    verbose && '--verbose'
-  ].filter(function(e) { return e; });
-  var proc = spawn('npm', args, {stdio: 'inherit'});
+
+  var proc = spawn(command, args, {stdio: 'inherit'});
   proc.on('close', function (code) {
     if (code !== 0) {
-      console.error('`npm ' + args.join(' ') + '` failed');
+      console.error('`' + command + ' ' + args.join(' ') + '` failed');
       return;
     }
 
@@ -88,26 +114,26 @@ module.exports = function(appPath, appName, verbose, originalDirectory) {
     }
 
     console.log();
-    console.log('Success! Created ' + appName + ' at ' + appPath + '.');
+    console.log('Success! Created ' + appName + ' at ' + appPath);
     console.log('Inside that directory, you can run several commands:');
     console.log();
-    console.log(chalk.cyan('  npm start'));
+    console.log(chalk.cyan('  ' + command + ' start'));
     console.log('    Starts the development server.');
     console.log();
-    console.log(chalk.cyan('  npm run build'));
+    console.log(chalk.cyan('  ' + command + ' run build'));
     console.log('    Bundles the app into static files for production.');
     console.log();
-    console.log(chalk.cyan('  npm test'));
+    console.log(chalk.cyan('  ' + command + ' test'));
     console.log('    Starts the test runner.');
     console.log();
-    console.log(chalk.cyan('  npm run eject'));
+    console.log(chalk.cyan('  ' + command + ' run eject'));
     console.log('    Removes this tool and copies build dependencies, configuration files');
     console.log('    and scripts into the app directory. If you do this, you can’t go back!');
     console.log();
     console.log('We suggest that you begin by typing:');
     console.log();
     console.log(chalk.cyan('  cd'), cdpath);
-    console.log('  ' + chalk.cyan('npm start'));
+    console.log('  ' + chalk.cyan(command + ' start'));
     if (readmeExists) {
       console.log();
       console.log(chalk.yellow('You had a `README.md` file, we renamed it to `README.old.md`'));

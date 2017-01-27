@@ -12,7 +12,7 @@
 // Do this as the first thing so that any code reading it knows the right env.
 process.env.NODE_ENV = 'production';
 
-// Load environment variables from .env file. Surpress warnings using silent
+// Load environment variables from .env file. Suppress warnings using silent
 // if this file is missing. dotenv will never modify any environment variables
 // that have already been set.
 // https://github.com/motdotla/dotenv
@@ -23,13 +23,14 @@ var fs = require('fs-extra');
 var path = require('path');
 var filesize = require('filesize');
 var gzipSize = require('gzip-size').sync;
-var rimrafSync = require('rimraf').sync;
 var webpack = require('webpack');
 var config = require('../config/webpack.config.prod');
 var paths = require('../config/paths');
 var checkRequiredFiles = require('react-dev-utils/checkRequiredFiles');
 var recursive = require('recursive-readdir');
 var stripAnsi = require('strip-ansi');
+
+var useYarn = fs.existsSync(paths.yarnLockFile);
 
 // Warn and crash if required files are missing
 if (!checkRequiredFiles([paths.appHtml, paths.appIndexJs])) {
@@ -75,7 +76,7 @@ recursive(paths.appBuild, (err, fileNames) => {
 
   // Remove all content but keep the directory so that
   // if you're in it, you don't end up in Trash
-  rimrafSync(paths.appBuild + '/*');
+  fs.emptyDirSync(paths.appBuild);
 
   // Start the webpack build
   build(previousSizeMap);
@@ -118,15 +119,34 @@ function printFileSizes(stats, previousSizeMap) {
   });
 }
 
+// Print out errors
+function printErrors(summary, errors) {
+  console.log(chalk.red(summary));
+  console.log();
+  errors.forEach(err => {
+    console.log(err.message || err);
+    console.log();
+  });
+}
+
 // Create the production build and print the deployment instructions.
 function build(previousSizeMap) {
   console.log('Creating an optimized production build...');
   webpack(config).run((err, stats) => {
     if (err) {
-      console.error('Failed to create a production build. Reason:');
-      console.error(err.message || err);
+      printErrors('Failed to compile.', [err]);
       process.exit(1);
     }
+
+    if (stats.compilation.errors.length) {
+      printErrors('Failed to compile.', stats.compilation.errors);
+      process.exit(1);
+    }
+
+    if (process.env.CI && stats.compilation.warnings.length) {
+     printErrors('Failed to compile.', stats.compilation.warnings);
+     process.exit(1);
+   }
 
     console.log(chalk.green('Compiled successfully.'));
     console.log();
@@ -137,7 +157,8 @@ function build(previousSizeMap) {
     console.log();
 
     var openCommand = process.platform === 'win32' ? 'start' : 'open';
-    var homepagePath = require(paths.appPackageJson).homepage;
+    var appPackage  = require(paths.appPackageJson);
+    var homepagePath = appPackage.homepage;
     var publicPath = config.output.publicPath;
     if (homepagePath && homepagePath.indexOf('.github.io/') !== -1) {
       // "homepage": "http://user.github.io/project"
@@ -146,14 +167,28 @@ function build(previousSizeMap) {
       console.log();
       console.log('The ' + chalk.cyan('build') + ' folder is ready to be deployed.');
       console.log('To publish it at ' + chalk.green(homepagePath) + ', run:');
+      // If script deploy has been added to package.json, skip the instructions
+      if (typeof appPackage.scripts.deploy === 'undefined') {
+        console.log();
+        if (useYarn) {
+          console.log('  ' + chalk.cyan('yarn') +  ' add --dev gh-pages');
+        } else {
+          console.log('  ' + chalk.cyan('npm') +  ' install --save-dev gh-pages');
+        }
+        console.log();
+        console.log('Add the following script in your ' + chalk.cyan('package.json') + '.');
+        console.log();
+        console.log('    ' + chalk.dim('// ...'));
+        console.log('    ' + chalk.yellow('"scripts"') + ': {');
+        console.log('      ' + chalk.dim('// ...'));
+        console.log('      ' + chalk.yellow('"predeploy"') + ': ' + chalk.yellow('"npm run build",'));
+        console.log('      ' + chalk.yellow('"deploy"') + ': ' + chalk.yellow('"gh-pages -d build"'));
+        console.log('    }');
+        console.log();
+        console.log('Then run:');
+      }
       console.log();
-      console.log('  ' + chalk.cyan('git') + ' commit -am ' + chalk.yellow('"Save local changes"'));
-      console.log('  ' + chalk.cyan('git') + ' checkout -B gh-pages');
-      console.log('  ' + chalk.cyan('git') + ' add -f build');
-      console.log('  ' + chalk.cyan('git') + ' commit -am ' + chalk.yellow('"Rebuild website"'));
-      console.log('  ' + chalk.cyan('git') + ' filter-branch -f --prune-empty --subdirectory-filter build');
-      console.log('  ' + chalk.cyan('git') + ' push -f origin gh-pages');
-      console.log('  ' + chalk.cyan('git') + ' checkout -');
+      console.log('  ' + chalk.cyan(useYarn ? 'yarn' : 'npm') +  ' run deploy');
       console.log();
     } else if (publicPath !== '/') {
       // "homepage": "http://mywebsite.com/project"
@@ -180,7 +215,11 @@ function build(previousSizeMap) {
       console.log('The ' + chalk.cyan('build') + ' folder is ready to be deployed.');
       console.log('You may also serve it locally with a static server:')
       console.log();
-      console.log('  ' + chalk.cyan('npm') +  ' install -g pushstate-server');
+      if (useYarn) {
+        console.log('  ' + chalk.cyan('yarn') +  ' global add pushstate-server');
+      } else {
+        console.log('  ' + chalk.cyan('npm') +  ' install -g pushstate-server');
+      }
       console.log('  ' + chalk.cyan('pushstate-server') + ' build');
       console.log('  ' + chalk.cyan(openCommand) + ' http://localhost:9000');
       console.log();
