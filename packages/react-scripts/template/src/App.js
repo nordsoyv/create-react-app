@@ -23,8 +23,11 @@ class App extends Component {
         <p className="App-intro">
           To get started, edit <code>src/App.js</code> and save to reload.
         </p>
+        <p>
+          Using redux !
+        </p>
         <span>
-          <button onClick={this.onDecrement}>-</button>{this.props.number}<button onClick={this.onIncrement}>+</button>
+          <button onClick={this.onDecrement}> - </button> {this.props.number} <button onClick={this.onIncrement}> + </button>
         </span>
       </div>
     );
